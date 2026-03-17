@@ -14,14 +14,14 @@ Raspberry Pi system stats on a **128×32 I2C OLED** (e.g. [Adafruit PiOLED](http
 | Component        | Notes |
 |------------------|--------|
 | OLED             | 128×32 I2C SSD1306 (e.g. Adafruit PiOLED at 0x3C). |
-| Momentary button | One leg to a **GPIO** (default BCM 17), other to **GND**. Enable internal pull-up in software. |
-| WS2812B LED      | Data to **GPIO 18** (default; Pi 3/4). Pi 5: see [Pi 5 notes](#raspberry-pi-5) below. |
+| Momentary button | One leg to the **button GPIO** (see `PI_STATS_BUTTON_GPIO` in .env), other to **GND**. Enable internal pull-up in software. |
+| WS2812B LED      | Data to the **LED GPIO** (see `PI_STATS_LED_GPIO` in .env). Pi 5: see [Pi 5 notes](#raspberry-pi-5) below. |
 
 ### Wiring
 
 - **OLED**: I2C (SDA/SCL and power). On Pi: SDA = GPIO 2, SCL = GPIO 3; 3.3 V and GND.
-- **Button**: One pin to **BCM 17** (or your chosen GPIO), other to **GND**. No external resistor; script uses internal pull-up.
-- **WS2812B**: Data In → **GPIO 18** (or your chosen pin), 5 V and GND. Use a level shifter if the strip is 5 V and the Pi is 3.3 V for reliability.
+- **Button**: One pin to the **button GPIO** (configurable in .env), other to **GND**. No external resistor; script uses internal pull-up.
+- **WS2812B**: Data In → the **LED GPIO** (configurable in .env), 5 V and GND. Use a level shifter if the strip is 5 V and the Pi is 3.3 V for reliability.
 
 See [docs/pi-stats-display-wiring.md](docs/pi-stats-display-wiring.md) for wiring notes.
 
@@ -93,8 +93,8 @@ Or install and run as a systemd service (see [Run on boot](#run-on-boot) below).
    sudo .venv/bin/python test_button.py
    ```
    Press the button. You should see `Button pressed` and `Button released` in the terminal. If you don’t:
-   - **Wiring**: One button leg must go to **GPIO** (default BCM 17 = physical pin **11**), the other to **GND** (e.g. pin 9). Not 3.3 V.
-   - **GPIO number**: If you used a different pin, set `PI_STATS_BUTTON_GPIO` in `.env` to the **BCM** number (e.g. `27` for physical 13). See a [GPIO map](https://pinout.xyz/).
+   - **Wiring**: One button leg must go to the **button GPIO** (see `PI_STATS_BUTTON_GPIO` in .env), the other to **GND** (e.g. pin 9). Not 3.3 V.
+   - **GPIO number**: Set `PI_STATS_BUTTON_GPIO` in `.env` to the **BCM** number for your pin (e.g. `27` for physical 13). See a [GPIO map](https://pinout.xyz/).
 
 3. **Run the main script in the foreground**  
    So you can see logs when the button is pressed:

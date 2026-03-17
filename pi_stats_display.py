@@ -2,7 +2,8 @@
 """
 Raspberry Pi stats display for 128x32 I2C OLED (e.g. Adafruit PiOLED).
 - Momentary button: press to turn on / show main stats; hold 3s to show USB drive stats.
-- WS2812B LED: overall load indicator (green -> yellow -> orange -> red flashing).
+- WS2812B LED: overall load indicator (green -> yellow -> orange -> red flashing);
+  optional HDD-style brief flash when USB/storage (sd*) is accessed.
 - Compatible with Raspberry Pi 3, 4, and 5.
 """
 
@@ -51,6 +52,13 @@ VALUE_FONT_SIZE = int(os.environ.get("PI_STATS_VALUE_FONT_SIZE", "18"))
 I2C_ADDRESS = int(os.environ.get("PI_STATS_OLED_I2C_ADDR", "0x3C"), 16)
 DEBUG_FORCE_MAIN_VIEW = os.environ.get("PI_STATS_DEBUG_FORCE_MAIN_VIEW", "0") == "1"
 BUTTON_ACTIVE_LOW = os.environ.get("PI_STATS_BUTTON_ACTIVE_LOW", "1") == "1"
+# Disk activity LED: brief flash when USB/storage is accessed (HDD-style). 0 = disabled.
+LED_DISK_ACTIVITY_FLASH_MS = int(os.environ.get("PI_STATS_LED_DISK_ACTIVITY_FLASH_MS", "80"))
+LED_DISK_ACTIVITY_RGB = (
+    int(os.environ.get("PI_STATS_LED_DISK_ACTIVITY_R", "200")),
+    int(os.environ.get("PI_STATS_LED_DISK_ACTIVITY_G", "200")),
+    int(os.environ.get("PI_STATS_LED_DISK_ACTIVITY_B", "200")),
+)
 
 # View state
 VIEW_OFF = "off"
@@ -265,6 +273,30 @@ def get_usb_drives() -> list[tuple[str, str, str, float]]:
     except OSError:
         pass
     return result
+
+
+def get_disk_io_total() -> int:
+    """
+    Total read + write sectors for block devices that are typically USB (sd*).
+    Used to detect disk activity for HDD-style LED flash.
+    """
+    try:
+        total = 0
+        with open("/proc/diskstats", "r") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) < 11:
+                    continue
+                name = parts[2]
+                if not name.startswith("sd"):
+                    continue
+                # read_sectors = 6th field (1-based 6), write_sectors = 10th
+                read_sectors = int(parts[5])
+                write_sectors = int(parts[9])
+                total += read_sectors + write_sectors
+        return total
+    except (OSError, ValueError, IndexError):
+        return 0
 
 
 def get_stress_score() -> float:
@@ -535,6 +567,8 @@ def main() -> None:
     press_started_at = 0.0
     last_raw_level = raw_level
     last_edge_at = 0.0
+    disk_io_prev = get_disk_io_total()
+    disk_activity_until = 0.0
 
     log.info(
         "Running. Button on BCM GPIO %s (physical pin %s). Initial raw=%s (0=pressed/grounded, 1=released). "
@@ -595,19 +629,32 @@ def main() -> None:
                 time.sleep(0.1)
                 continue
 
-            # Update LED (with flash for red levels)
+            # Disk activity: HDD-style brief flash when USB/storage I/O detected
+            if LED_DISK_ACTIVITY_FLASH_MS > 0:
+                disk_io_curr = get_disk_io_total()
+                if disk_io_curr > disk_io_prev:
+                    disk_activity_until = now + (LED_DISK_ACTIVITY_FLASH_MS / 1000.0)
+                disk_io_prev = disk_io_curr
+
+            # Update LED (stress color + HDD-style activity flash)
             if led_ok:
-                rgb, flash_interval = _led_level_for_stress(stress)
-                if flash_interval > 0:
-                    if now - led_last_flash >= flash_interval:
-                        led_last_flash = now
-                        led_flash_on = not led_flash_on
-                    if led_flash_on:
-                        led_set_color(*rgb)
-                    else:
-                        led_off()
+                in_activity_window = (
+                    LED_DISK_ACTIVITY_FLASH_MS > 0 and now < disk_activity_until
+                )
+                if in_activity_window:
+                    led_set_color(*LED_DISK_ACTIVITY_RGB)
                 else:
-                    led_set_color(*rgb)
+                    rgb, flash_interval = _led_level_for_stress(stress)
+                    if flash_interval > 0:
+                        if now - led_last_flash >= flash_interval:
+                            led_last_flash = now
+                            led_flash_on = not led_flash_on
+                        if led_flash_on:
+                            led_set_color(*rgb)
+                        else:
+                            led_off()
+                    else:
+                        led_set_color(*rgb)
 
             # Build one-line rotating screens.
             ip = get_ip()
