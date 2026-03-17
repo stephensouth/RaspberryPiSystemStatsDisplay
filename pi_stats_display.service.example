@@ -1,0 +1,19 @@
+[Unit]
+Description=Pi Stats Display (OLED + button + WS2812B)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/path/to/South-Home-Automation/pi_stats_display
+Environment=PATH=/path/to/South-Home-Automation/pi_stats_display/.venv/bin:/usr/bin
+ExecStart=/path/to/South-Home-Automation/pi_stats_display/.venv/bin/python pi_stats_display.py
+Restart=on-failure
+RestartSec=5
+
+# Optional: load .env from WorkingDirectory
+# EnvironmentFile=/path/to/South-Home-Automation/pi_stats_display/.env
+
+[Install]
+WantedBy=multi-user.target

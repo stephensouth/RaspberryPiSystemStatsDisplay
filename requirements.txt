@@ -1,0 +1,12 @@
+# Raspberry Pi stats display (OLED + button + WS2812B)
+# Python 3.9+ on Raspberry Pi OS (Pi 3/4/5)
+
+# OLED (128x32 I2C, e.g. Adafruit PiOLED)
+# RPi.GPIO required by Blinka for I2C on Raspberry Pi (install in venv when using sudo .venv/bin/python)
+RPi.GPIO>=0.7.0
+Adafruit-Blinka>=8.0.0
+adafruit-circuitpython-ssd1306>=2.12.0
+Pillow>=9.0.0
+
+# WS2812B status LED (Pi 3/4; Pi 5 may need rp1 overlay or use optional neopixel)
+rpi_ws281x>=5.0.0
