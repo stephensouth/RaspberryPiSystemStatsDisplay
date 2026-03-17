@@ -46,6 +46,8 @@ LED_GPIO = int(os.environ.get("PI_STATS_LED_GPIO", "18"))        # BCM 18 (PWM f
 LED_COUNT = int(os.environ.get("PI_STATS_LED_COUNT", "1"))       # number of WS2812B LEDs
 DISPLAY_IDLE_OFF_SECONDS = float(os.environ.get("PI_STATS_DISPLAY_IDLE_OFF", "60"))
 SCREEN_ROTATE_SECONDS = float(os.environ.get("PI_STATS_SCREEN_ROTATE_SECONDS", "4.2"))
+LABEL_FONT_SIZE = int(os.environ.get("PI_STATS_LABEL_FONT_SIZE", "8"))
+VALUE_FONT_SIZE = int(os.environ.get("PI_STATS_VALUE_FONT_SIZE", "18"))
 I2C_ADDRESS = int(os.environ.get("PI_STATS_OLED_I2C_ADDR", "0x3C"), 16)
 DEBUG_FORCE_MAIN_VIEW = os.environ.get("PI_STATS_DEBUG_FORCE_MAIN_VIEW", "0") == "1"
 BUTTON_ACTIVE_LOW = os.environ.get("PI_STATS_BUTTON_ACTIVE_LOW", "1") == "1"
@@ -373,11 +375,11 @@ def display_init() -> bool:
         _disp.show()
         _font = ImageFont.load_default()
         try:
-            _font_main = ImageFont.truetype(_font_path, 12)
+            _font_main = ImageFont.truetype(_font_path, VALUE_FONT_SIZE)
         except Exception:
             _font_main = _font
         try:
-            _font_label = ImageFont.truetype(_font_path, 8)
+            _font_label = ImageFont.truetype(_font_path, LABEL_FONT_SIZE)
         except Exception:
             _font_label = _font
         return True
@@ -412,20 +414,20 @@ def display_show_lines(
         log.debug("display_show_lines: %s", e)
 
 
-def _fit_font(draw, text: str, max_w: int, max_h: int, min_size: int, max_size: int):
-    from PIL import ImageFont
-    fit_font = _font_main if _font_main is not None else _font
-    for size in range(max_size, min_size - 1, -1):
-        try:
-            candidate = ImageFont.truetype(_font_path, size)
-        except Exception:
-            break
-        left, top, right, bottom = draw.textbbox((0, 0), text, font=candidate)
-        # Keep extra vertical margin to avoid clipping descenders on 128x32 OLED.
-        if (right - left) <= max_w and (bottom - top) <= (max_h - 3):
-            fit_font = candidate
-            break
-    return fit_font
+def _truncate_to_width(draw, text: str, font, max_w: int) -> str:
+    """Trim text to fit width, adding ellipsis when needed."""
+    left, _, right, _ = draw.textbbox((0, 0), text, font=font)
+    if (right - left) <= max_w:
+        return text
+    ellipsis = "..."
+    trimmed = text
+    while trimmed:
+        candidate = trimmed + ellipsis
+        l2, _, r2, _ = draw.textbbox((0, 0), candidate, font=font)
+        if (r2 - l2) <= max_w:
+            return candidate
+        trimmed = trimmed[:-1]
+    return ellipsis
 
 
 def display_show_stat_screen(label: str, value: str) -> None:
@@ -441,6 +443,7 @@ def display_show_stat_screen(label: str, value: str) -> None:
 
         # Label area: top quarter (~8 px).
         label_font = _font_label if _font_label is not None else _font
+        label = _truncate_to_width(draw, label, label_font, DISPLAY_WIDTH - 2)
         l_left, l_top, l_right, l_bottom = draw.textbbox((0, 0), label, font=label_font)
         lw = l_right - l_left
         lh = l_bottom - l_top
@@ -451,7 +454,8 @@ def display_show_stat_screen(label: str, value: str) -> None:
         # Value area: bottom two-thirds (~22 px), starts near y=9.
         value_y0 = 9
         value_h = DISPLAY_HEIGHT - value_y0
-        value_font = _fit_font(draw, value, DISPLAY_WIDTH - 2, value_h - 1, 10, 24)
+        value_font = _font_main if _font_main is not None else _font
+        value = _truncate_to_width(draw, value, value_font, DISPLAY_WIDTH - 2)
         v_left, v_top, v_right, v_bottom = draw.textbbox((0, 0), value, font=value_font)
         vw = v_right - v_left
         vh = v_bottom - v_top

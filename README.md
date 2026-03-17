@@ -114,6 +114,8 @@ Or install and run as a systemd service (see [Run on boot](#run-on-boot) below).
 | `PI_STATS_LED_GPIO` | 18 | BCM GPIO for WS2812B data. |
 | `PI_STATS_LED_COUNT` | 1 | Number of LEDs. |
 | `PI_STATS_SCREEN_ROTATE_SECONDS` | 4.2 | Auto-rotate interval for stat screens. |
+| `PI_STATS_LABEL_FONT_SIZE` | 8 | Fixed label font size (top quarter). |
+| `PI_STATS_VALUE_FONT_SIZE` | 18 | Fixed value font size (bottom area). |
 | `PI_STATS_DISPLAY_IDLE_OFF` | 60 | Display off after this many seconds idle. |
 | `PI_STATS_OLED_I2C_ADDR` | 0x3C | OLED I2C address (hex). |
 | `PI_STATS_DEBUG_FORCE_MAIN_VIEW` | 0 | Set to `1` to force main screen for troubleshooting. |
