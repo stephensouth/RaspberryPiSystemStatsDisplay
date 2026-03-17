@@ -7,7 +7,7 @@ Raspberry Pi system stats on a **128×32 I2C OLED** (e.g. [Adafruit PiOLED](http
 - **Rotating single-line screens**: Each stat line is its own screen (IP, CPU throttle rate, memory, disk, and USB details), rotating one line at a time.
 - **CPU + RAM stats**: CPU screen shows 1-minute load as a percent; MEM screen shows used/total MB with current %.
 - **Momentary button**: Press once to start a 60-second session (configurable). During the session, stat screens auto-rotate every 4.2 seconds (configurable), then the display turns off.
-- **WS2812B LED**: Overall “stress” (CPU + memory + disk) as a color gradient: dark green (light load) → green → yellow → orange → red, with slow/medium/fast flashing red at high load.
+- **WS2812B LED**: Overall “stress” (CPU + memory + disk) as a color gradient: dark green (light load) → green → yellow → orange → red, with slow/medium/fast flashing red at high load. When USB storage (sd*) is accessed, the LED enters a 4.2 s cycle: blue for 2.1 s, then the current load color for 2.1 s, repeating until I/O has been idle for a few seconds.
 
 ## Hardware
 
@@ -113,6 +113,10 @@ Or install and run as a systemd service (see [Run on boot](#run-on-boot) below).
 | `PI_STATS_BUTTON_GPIO` | 17 | BCM GPIO for momentary button. |
 | `PI_STATS_LED_GPIO` | 18 | BCM GPIO for WS2812B data. |
 | `PI_STATS_LED_COUNT` | 1 | Number of LEDs. |
+| `PI_STATS_LED_USB_ACTIVITY_IDLE_SECONDS` | 5.0 | Seconds with no sd* I/O before leaving USB mode. |
+| `PI_STATS_LED_USB_CYCLE_SECONDS` | 4.2 | USB mode cycle length (load 2.1s + blue 2.1s). |
+| `PI_STATS_LED_USB_LOAD_SECONDS` | 2.1 | Seconds per cycle to show load color in USB mode. |
+| `PI_STATS_LED_USB_BLUE_R/G/B` | 0, 0, 200 | RGB for blue phase when USB is active. |
 | `PI_STATS_SCREEN_ROTATE_SECONDS` | 4.2 | Auto-rotate interval for stat screens. |
 | `PI_STATS_LABEL_FONT_SIZE` | 8 | Fixed label font size (top quarter). |
 | `PI_STATS_VALUE_FONT_SIZE` | 18 | Fixed value font size (bottom area). |

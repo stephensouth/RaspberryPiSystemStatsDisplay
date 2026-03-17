@@ -2,8 +2,8 @@
 """
 Raspberry Pi stats display for 128x32 I2C OLED (e.g. Adafruit PiOLED).
 - Momentary button: press to turn on / show main stats; hold 3s to show USB drive stats.
-- WS2812B LED: overall load indicator (green -> yellow -> orange -> red flashing);
-  optional HDD-style brief flash when USB/storage (sd*) is accessed.
+- WS2812B LED: overall load indicator (green -> yellow -> orange -> red flashing).
+  When USB/storage (sd*) is accessed: blue for 2.1s then load color for 2.1s in a 4.2s cycle.
 - Compatible with Raspberry Pi 3, 4, and 5.
 """
 
@@ -52,12 +52,14 @@ VALUE_FONT_SIZE = int(os.environ.get("PI_STATS_VALUE_FONT_SIZE", "18"))
 I2C_ADDRESS = int(os.environ.get("PI_STATS_OLED_I2C_ADDR", "0x3C"), 16)
 DEBUG_FORCE_MAIN_VIEW = os.environ.get("PI_STATS_DEBUG_FORCE_MAIN_VIEW", "0") == "1"
 BUTTON_ACTIVE_LOW = os.environ.get("PI_STATS_BUTTON_ACTIVE_LOW", "1") == "1"
-# Disk activity LED: brief flash when USB/storage is accessed (HDD-style). 0 = disabled.
-LED_DISK_ACTIVITY_FLASH_MS = int(os.environ.get("PI_STATS_LED_DISK_ACTIVITY_FLASH_MS", "80"))
-LED_DISK_ACTIVITY_RGB = (
-    int(os.environ.get("PI_STATS_LED_DISK_ACTIVITY_R", "200")),
-    int(os.environ.get("PI_STATS_LED_DISK_ACTIVITY_G", "200")),
-    int(os.environ.get("PI_STATS_LED_DISK_ACTIVITY_B", "200")),
+# USB activity mode: when sd* I/O is detected, show blue vs load color in a 4.2s cycle.
+LED_USB_ACTIVITY_IDLE_SECONDS = float(os.environ.get("PI_STATS_LED_USB_ACTIVITY_IDLE_SECONDS", "5.0"))
+LED_USB_CYCLE_TOTAL = float(os.environ.get("PI_STATS_LED_USB_CYCLE_SECONDS", "4.2"))
+LED_USB_LOAD_SHOW = float(os.environ.get("PI_STATS_LED_USB_LOAD_SECONDS", "2.1"))
+LED_USB_BLUE_RGB = (
+    int(os.environ.get("PI_STATS_LED_USB_BLUE_R", "0")),
+    int(os.environ.get("PI_STATS_LED_USB_BLUE_G", "0")),
+    int(os.environ.get("PI_STATS_LED_USB_BLUE_B", "200")),
 )
 
 # View state
@@ -568,7 +570,8 @@ def main() -> None:
     last_raw_level = raw_level
     last_edge_at = 0.0
     disk_io_prev = get_disk_io_total()
-    disk_activity_until = 0.0
+    usb_activity_until = 0.0
+    usb_mode_start = 0.0
 
     log.info(
         "Running. Button on BCM GPIO %s (physical pin %s). Initial raw=%s (0=pressed/grounded, 1=released). "
@@ -629,21 +632,20 @@ def main() -> None:
                 time.sleep(0.1)
                 continue
 
-            # Disk activity: HDD-style brief flash when USB/storage I/O detected
-            if LED_DISK_ACTIVITY_FLASH_MS > 0:
-                disk_io_curr = get_disk_io_total()
-                if disk_io_curr > disk_io_prev:
-                    disk_activity_until = now + (LED_DISK_ACTIVITY_FLASH_MS / 1000.0)
-                disk_io_prev = disk_io_curr
+            # USB activity mode: extend window on each sd* I/O; track first entry for phase
+            disk_io_curr = get_disk_io_total()
+            if disk_io_curr > disk_io_prev:
+                was_idle = now > usb_activity_until
+                usb_activity_until = now + LED_USB_ACTIVITY_IDLE_SECONDS
+                if was_idle:
+                    usb_mode_start = now
+            disk_io_prev = disk_io_curr
 
-            # Update LED (stress color + HDD-style activity flash)
+            # Update LED: stress-only when idle; in USB mode alternate load 2.1s / blue 2.1s every 4.2s
             if led_ok:
-                in_activity_window = (
-                    LED_DISK_ACTIVITY_FLASH_MS > 0 and now < disk_activity_until
-                )
-                if in_activity_window:
-                    led_set_color(*LED_DISK_ACTIVITY_RGB)
-                else:
+                in_usb_mode = now <= usb_activity_until
+                if not in_usb_mode:
+                    # Normal: stress color (green -> red, with red flash at high load)
                     rgb, flash_interval = _led_level_for_stress(stress)
                     if flash_interval > 0:
                         if now - led_last_flash >= flash_interval:
@@ -655,6 +657,25 @@ def main() -> None:
                             led_off()
                     else:
                         led_set_color(*rgb)
+                else:
+                    # Cycle: blue first 2.1s (starts when drive access begins), then load 2.1s
+                    phase = (now - usb_mode_start) % LED_USB_CYCLE_TOTAL
+                    if phase < LED_USB_LOAD_SHOW:
+                        # First 2.1s of each 4.2s: blue (USB activity)
+                        led_set_color(*LED_USB_BLUE_RGB)
+                    else:
+                        # Next 2.1s: system load color
+                        rgb, flash_interval = _led_level_for_stress(stress)
+                        if flash_interval > 0:
+                            if now - led_last_flash >= flash_interval:
+                                led_last_flash = now
+                                led_flash_on = not led_flash_on
+                            if led_flash_on:
+                                led_set_color(*rgb)
+                            else:
+                                led_off()
+                        else:
+                            led_set_color(*rgb)
 
             # Build one-line rotating screens.
             ip = get_ip()
